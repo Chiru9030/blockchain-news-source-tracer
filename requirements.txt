@@ -1,0 +1,5 @@
+newsapi-python
+web3
+textblob
+python-dotenv
+requests
