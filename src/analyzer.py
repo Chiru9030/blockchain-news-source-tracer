@@ -1,5 +1,9 @@
-from textblob import TextBlob
 from datetime import datetime
+
+try:
+    from textblob import TextBlob
+except ImportError:
+    TextBlob = None
 
 class SourceAnalyzer:
     def __init__(self):
@@ -14,49 +18,55 @@ class SourceAnalyzer:
             return None
 
         # Sort by published date
-        # Handle cases where publishedAt might be None or malformed
-        valid_articles = []
-        for a in articles:
-            if a.get('publishedAt'):
-                valid_articles.append(a)
-        
+        valid_articles = [a for a in articles if a.get('publishedAt')]
         if not valid_articles:
             return None
 
         sorted_articles = sorted(valid_articles, key=lambda x: x['publishedAt'])
-        
         original_source = sorted_articles[0]
-        
-        # Simple credibility algorithm:
-        # 1. Being the first (earliest timestamp).
-        # 2. Sentiment/Subjectivity check (optional - neutral is often better for news).
-        
+
         analysis_result = {
             "original_article": original_source,
             "timeline": [
-                {"source": a['source']['name'], "time": a['publishedAt']} for a in sorted_articles[:5]
+                {
+                    "source": a.get('source', {}).get('name', 'Unknown Source'),
+                    "title": a.get('title', 'Untitled'),
+                    "time": a.get('publishedAt'),
+                    "url": a.get('url', '#')
+                } for a in sorted_articles
             ],
             "confidence_score": self._calculate_confidence(original_source, sorted_articles)
         }
-        
+
         return analysis_result
 
     def _calculate_confidence(self, original, all_articles):
         """
-        Calculates a confidence score (0-100).
+        Calculates an objective provenance confidence score (0-100).
         """
-        score = 50  # Base score
-        
-        # Boost for being significantly earlier? 
-        # For now, just a placeholder logic.
-        
-        # Check title subjectivity
-        blob = TextBlob(original.get('title', ''))
-        if blob.subjectivity < 0.5:
-             score += 10 # More objective = potentially more credible
-        
-        # If multiple sources cite similar things later, boost score
-        if len(all_articles) > 3:
-            score += 20
-            
-        return min(score, 100)
+        score = 65  # Base confidence for chronological precedence
+
+        title = original.get('title', '')
+        if TextBlob:
+            try:
+                blob = TextBlob(title)
+                if blob.sentiment.subjectivity < 0.5:
+                    score += 15  # Objective reporting tone bonus
+                else:
+                    score -= 5
+            except Exception:
+                pass
+        else:
+            # High-fidelity fallback heuristic for tone
+            sensational_words = {'shocking', 'unbelievable', 'secret', 'miracle', 'revealed', 'insane', 'destroy'}
+            words = set(title.lower().split())
+            if not words.intersection(sensational_words):
+                score += 15
+
+        # Citation & corroboration multiplier
+        if len(all_articles) >= 3:
+            score += 15
+        elif len(all_articles) >= 2:
+            score += 10
+
+        return min(max(score, 30), 99)
