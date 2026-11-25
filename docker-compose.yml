@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  news-tracer-web:
+    build: .
+    container_name: blockchain_news_tracer
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - NEWS_API_KEY=${NEWS_API_KEY:-}
+      - POLYGON_RPC_URL=${POLYGON_RPC_URL:-https://polygon-rpc.com}
